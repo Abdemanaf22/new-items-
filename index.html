@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROCUT — Product Adder</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f10;
+    --surface: #18181b;
+    --surface2: #1f1f23;
+    --border: #2a2a30;
+    --border2: #38383f;
+    --text: #f0f0f2;
+    --text2: #9090a0;
+    --text3: #60606e;
+    --accent: #e8a020;
+    --accent-dim: rgba(232,160,32,0.12);
+    --accent-border: rgba(232,160,32,0.3);
+    --green: #22c982;
+    --green-dim: rgba(34,201,130,0.1);
+    --red: #f05050;
+    --red-dim: rgba(240,80,80,0.1);
+    --radius: 10px;
+    --radius-sm: 6px;
+    --font: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    padding: 0 0 48px;
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: rgba(15,15,16,0.92);
+    backdrop-filter: blur(12px);
+    z-index: 10;
+  }
+  .logo {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--text2); font-weight: 400; }
+  .topbar-status { font-size: 12px; color: var(--text3); }
+
+  /* ── Container ── */
+  .container { max-width: 560px; margin: 0 auto; padding: 32px 20px 0; }
+
+  /* ── Step indicator ── */
+  .steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 32px;
+  }
+  .step-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+  }
+  .step-item:last-child { flex: none; }
+  .step-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .step-dot.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .step-dot.done { border-color: var(--green); background: var(--green-dim); color: var(--green); }
+  .step-dot.done::after { content: '✓'; font-size: 11px; }
+  .step-dot.done .step-num { display: none; }
+  .step-line { flex: 1; height: 1px; background: var(--border); margin: 0 4px; }
+  .step-line.done { background: var(--green); opacity: 0.4; }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .card-head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card-head .step-num {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .card-head h3 { font-size: 14px; font-weight: 500; color: var(--text); }
+  .card-head .card-sub { font-size: 12px; color: var(--text3); margin-left: auto; }
+  .card-body { padding: 18px; }
+
+  /* ── Upload zone ── */
+  .upload-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: var(--accent-dim); }
+  .upload-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-icon { font-size: 28px; margin-bottom: 8px; }
+  .upload-label { font-size: 14px; color: var(--text2); }
+  .upload-label span { color: var(--accent); }
+  .upload-hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  .preview-wrap {
+    display: none;
+    gap: 14px;
+    align-items: center;
+  }
+  .preview-wrap.show { display: flex; }
+  .preview-img {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border2);
+    flex-shrink: 0;
+  }
+  .preview-info { flex: 1; min-width: 0; }
+  .preview-name { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .preview-size { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .preview-change {
+    font-size: 12px; color: var(--text3); background: none; border: none;
+    cursor: pointer; text-decoration: underline;
+  }
+  .preview-change:hover { color: var(--accent); }
+
+  /* ── Upload progress ── */
+  .upload-progress { margin-top: 12px; display: none; }
+  .upload-progress.show { display: block; }
+  .progress-bar { height: 3px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.3s; width: 0%; }
+  .progress-text { font-size: 11px; color: var(--text3); margin-top: 6px; }
+
+  /* ── Form fields ── */
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 5px; }
+  select, input[type=text], input[type=number] {
+    width: 100%;
+    height: 38px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--font);
+    padding: 0 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    appearance: none;
+  }
+  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2360606e' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px; }
+  select:focus, input:focus { border-color: var(--accent); }
+  select option { background: #1f1f23; }
+  select.loading { color: var(--text3); }
+
+  /* ── Price grid ── */
+  .price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .price-field label { font-size: 11px; }
+  .price-field input { font-family: var(--mono); font-size: 13px; }
+
+  /* ── Code preview ── */
+  .code-preview {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .code-val { font-family: var(--mono); font-size: 15px; color: var(--accent); letter-spacing: 0.05em; }
+  .code-hint { font-size: 11px; color: var(--text3); }
+
+  /* ── Submit button ── */
+  .submit-btn {
+    width: 100%;
+    height: 44px;
+    background: var(--accent);
+    color: #0f0f10;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.15s, transform 0.1s;
+    margin-top: 8px;
+  }
+  .submit-btn:hover { opacity: 0.9; }
+  .submit-btn:active { transform: scale(0.99); }
+  .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .submit-btn .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(0,0,0,0.2);
+    border-top-color: #000;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    display: none;
+  }
+  .submit-btn.loading .spinner { display: block; }
+  .submit-btn.loading .btn-text { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Success banner ── */
+  .success-banner {
+    display: none;
+    background: var(--green-dim);
+    border: 1px solid rgba(34,201,130,0.25);
+    border-radius: var(--radius);
+    padding: 20px 20px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+  .success-banner.show { display: block; }
+  .success-icon { font-size: 28px; margin-bottom: 8px; }
+  .success-title { font-size: 15px; font-weight: 600; color: var(--green); margin-bottom: 6px; }
+  .success-code { font-family: var(--mono); font-size: 13px; color: var(--text2); }
+  .success-again {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--accent);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  /* ── Error ── */
+  .error-msg {
+    display: none;
+    background: var(--red-dim);
+    border: 1px solid rgba(240,80,80,0.25);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--red);
+    margin-top: 12px;
+  }
+  .error-msg.show { display: block; }
+
+  /* ── Field error ── */
+  .field-err { font-size: 11px; color: var(--red); margin-top: 4px; display: none; }
+  .field-err.show { display: block; }
+  input.invalid, select.invalid { border-color: var(--red); }
+
+  @media (max-width: 480px) {
+    .price-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">PROCUT <span>/ Product Adder</span></div>
+  <div class="topbar-status" id="topbarStatus">Configure URL below</div>
+</div>
+
+<div class="container">
+
+  <!-- Step indicator -->
+  <div class="steps" id="stepIndicator">
+    <div class="step-item">
+      <div class="step-dot active" id="sd1"><span class="step-num">1</span></div>
+    </div>
+    <div class="step-line" id="sl1"></div>
+    <div class="step-item">
+      <div class="step-dot" id="sd2"><span class="step-num">2</span></div>
+    </div>
+    <div class="step-line" id="sl2"></div>
+    <div class="step-item">
+      <div class="step-dot" id="sd3"><span class="step-num">3</span></div>
+    </div>
+    <div class="step-line" id="sl3"></div>
+    <div class="step-item">
+      <div class="step-dot" id="sd4"><span class="step-num">4</span></div>
+    </div>
+  </div>
+
+  <!-- Success banner -->
+  <div class="success-banner" id="successBanner">
+    <div class="success-icon">✓</div>
+    <div class="success-title">Product Added Successfully</div>
+    <div class="success-code" id="successCode"></div>
+    <button class="success-again" onclick="resetForm()">+ Add another product</button>
+  </div>
+
+  <!-- Step 1: Image -->
+  <div class="card" id="card1">
+    <div class="card-head">
+      <div class="step-num">1</div>
+      <h3>Product Image</h3>
+    </div>
+    <div class="card-body">
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="imageFile" accept="image/*" onchange="onFileSelect(event)">
+        <div class="upload-icon">🖼️</div>
+        <div class="upload-label">Drop image or <span>browse</span></div>
+        <div class="upload-hint">JPG, PNG, WEBP — max 5 MB</div>
+      </div>
+      <div class="preview-wrap" id="previewWrap">
+        <img class="preview-img" id="previewImg" src="" alt="">
+        <div class="preview-info">
+          <div class="preview-name" id="previewName"></div>
+          <div class="preview-size" id="previewSize"></div>
+        </div>
+        <button class="preview-change" onclick="clearImage()">Change</button>
+      </div>
+      <div class="upload-progress" id="uploadProgress">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-text" id="progressText">Uploading…</div>
+      </div>
+      <div class="error-msg" id="imgError"></div>
+    </div>
+  </div>
+
+  <!-- Step 2: Category -->
+  <div class="card" id="card2">
+    <div class="card-head">
+      <div class="step-num">2</div>
+      <h3>Category</h3>
+      <span class="card-sub" id="sheetLoadStatus">Loading…</span>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label for="sheetSelect">Sheet / Category</label>
+        <select id="sheetSelect" class="loading" onchange="onSheetChange()">
+          <option value="">Loading sheets…</option>
+        </select>
+        <div class="field-err" id="sheetErr">Please select a category.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Details -->
+  <div class="card" id="card3">
+    <div class="card-head">
+      <div class="step-num">3</div>
+      <h3>Product Details</h3>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label for="productName">Product Name</label>
+        <input type="text" id="productName" placeholder="e.g. HSS Drill Bit Set 13pc" oninput="clearErr('nameErr','productName')">
+        <div class="field-err" id="nameErr">Product name is required.</div>
+      </div>
+      <div class="price-grid">
+        <div class="price-field field">
+          <label for="p1">Price Tier 1 (Lowest)</label>
+          <input type="number" id="p1" min="0" step="0.01" placeholder="0.00" oninput="clearErr('p1Err','p1')">
+          <div class="field-err" id="p1Err">Required.</div>
+        </div>
+        <div class="price-field field">
+          <label for="p2">Price Tier 2</label>
+          <input type="number" id="p2" min="0" step="0.01" placeholder="0.00" oninput="clearErr('p2Err','p2')">
+          <div class="field-err" id="p2Err">Required.</div>
+        </div>
+        <div class="price-field field">
+          <label for="p3">Price Tier 3</label>
+          <input type="number" id="p3" min="0" step="0.01" placeholder="0.00" oninput="clearErr('p3Err','p3')">
+          <div class="field-err" id="p3Err">Required.</div>
+        </div>
+        <div class="price-field field">
+          <label for="p4">Price Tier 4 (Highest)</label>
+          <input type="number" id="p4" min="0" step="0.01" placeholder="0.00" oninput="clearErr('p4Err','p4')">
+          <div class="field-err" id="p4Err">Required.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Item code preview -->
+  <div class="card" id="card4">
+    <div class="card-head">
+      <div class="step-num">4</div>
+      <h3>Item Code</h3>
+      <span class="card-sub">Auto-generated</span>
+    </div>
+    <div class="card-body">
+      <div class="code-preview">
+        <span class="code-val" id="codeVal">—</span>
+        <span class="code-hint" id="codeHint">Select a category to preview</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="error-msg" id="submitError"></div>
+  <button class="submit-btn" id="submitBtn" onclick="submitProduct()" disabled>
+    <div class="spinner"></div>
+    <span class="btn-text">Add Product</span>
+  </button>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIG — set your deployed Apps Script URL
+// ─────────────────────────────────────────────
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztWGA2j4b7UTZIJLJvuWiAaL_lnWo38YV3xBmIbvFOxu0E3mFM0x6Nh3jHSaEYsF1pxg/exec'; // ← replace
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+let uploadedImageUrl = null;
+let nextCode = null;
+let sheetsLoaded = false;
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  loadSheets();
+  setupDrag();
+  updateSubmitBtn();
+});
+
+// ─────────────────────────────────────────────
+// Drag & drop
+// ─────────────────────────────────────────────
+function setupDrag() {
+  const zone = document.getElementById('uploadZone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+}
+
+// ─────────────────────────────────────────────
+// Image handling
+// ─────────────────────────────────────────────
+function onFileSelect(e) {
+  const f = e.target.files[0];
+  if (f) handleFile(f);
+}
+
+function handleFile(file) {
+  if (!file.type.startsWith('image/')) { showImgError('Only image files are supported.'); return; }
+  if (file.size > 5 * 1024 * 1024) { showImgError('File too large. Max 5 MB.'); return; }
+  hideImgError();
+
+  // Show preview
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('previewImg').src = e.target.result;
+    document.getElementById('previewName').textContent = file.name;
+    document.getElementById('previewSize').textContent = (file.size / 1024).toFixed(0) + ' KB';
+    document.getElementById('uploadZone').style.display = 'none';
+    document.getElementById('previewWrap').classList.add('show');
+    uploadImageToServer(file, e.target.result);
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearImage() {
+  uploadedImageUrl = null;
+  document.getElementById('uploadZone').style.display = '';
+  document.getElementById('previewWrap').classList.remove('show');
+  document.getElementById('imageFile').value = '';
+  document.getElementById('uploadProgress').classList.remove('show');
+  setProgress(0, '');
+  updateSubmitBtn();
+  setStep(1);
+}
+
+function uploadImageToServer(file, dataUrl) {
+  showProgress(0, 'Preparing upload…');
+
+  // Simulate progress while uploading (Apps Script is slow)
+  let prog = 0;
+  const ticker = setInterval(() => {
+    prog = Math.min(prog + 8, 85);
+    setProgress(prog, 'Uploading to Drive…');
+  }, 300);
+
+  const base64 = dataUrl.split(',')[1];
+  callAS({ action: 'uploadImage', data: base64, mime: file.type, filename: file.name })
+    .then(url => {
+      clearInterval(ticker);
+      setProgress(100, 'Upload complete');
+      uploadedImageUrl = url;
+      setTimeout(() => {
+        document.getElementById('uploadProgress').classList.remove('show');
+        setStep(2);
+        updateSubmitBtn();
+      }, 600);
+    })
+    .catch(err => {
+      clearInterval(ticker);
+      document.getElementById('uploadProgress').classList.remove('show');
+      showImgError('Upload failed: ' + err.message);
+      clearImage();
+    });
+}
+
+function showProgress(pct, text) {
+  document.getElementById('uploadProgress').classList.add('show');
+  setProgress(pct, text);
+}
+function setProgress(pct, text) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = text;
+}
+function showImgError(msg) {
+  const el = document.getElementById('imgError');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function hideImgError() {
+  document.getElementById('imgError').classList.remove('show');
+}
+
+// ─────────────────────────────────────────────
+// Sheet loading
+// ─────────────────────────────────────────────
+function loadSheets() {
+  document.getElementById('sheetLoadStatus').textContent = 'Loading…';
+  callAS({ action: 'getSheets' })
+    .then(names => {
+      const sel = document.getElementById('sheetSelect');
+      sel.innerHTML = '<option value="">Select category…</option>' +
+        names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+      sel.classList.remove('loading');
+      sheetsLoaded = true;
+      document.getElementById('sheetLoadStatus').textContent = names.length + ' sheets';
+      document.getElementById('topbarStatus').textContent = 'Ready';
+    })
+    .catch(err => {
+      document.getElementById('sheetLoadStatus').textContent = 'Failed';
+      document.getElementById('topbarStatus').textContent = 'Connection error';
+      document.getElementById('sheetSelect').innerHTML = '<option value="">Could not load sheets</option>';
+    });
+}
+
+function onSheetChange() {
+  const sheet = document.getElementById('sheetSelect').value;
+  clearErr('sheetErr', 'sheetSelect');
+  document.getElementById('codeVal').textContent = '…';
+  document.getElementById('codeHint').textContent = 'Fetching next code';
+  nextCode = null;
+  if (!sheet) return;
+  callAS({ action: 'getNextCode', sheet })
+    .then(code => {
+      nextCode = code;
+      document.getElementById('codeVal').textContent = code;
+      document.getElementById('codeHint').textContent = 'Will be assigned on save';
+      setStep(3);
+      updateSubmitBtn();
+    })
+    .catch(() => {
+      document.getElementById('codeVal').textContent = '—';
+      document.getElementById('codeHint').textContent = 'Could not fetch code';
+    });
+}
+
+// ─────────────────────────────────────────────
+// Validation
+// ─────────────────────────────────────────────
+function validate() {
+  let ok = true;
+  if (!uploadedImageUrl) ok = false;
+  if (!document.getElementById('sheetSelect').value) {
+    showErr('sheetErr', 'sheetSelect'); ok = false;
+  }
+  ['productName'].forEach(id => {
+    if (!document.getElementById(id).value.trim()) {
+      showErr(id + 'Err', id); ok = false;
+    }
+  });
+  ['p1','p2','p3','p4'].forEach(id => {
+    const v = document.getElementById(id).value;
+    if (v === '' || isNaN(v)) { showErr(id + 'Err', id); ok = false; }
+  });
+  return ok;
+}
+function showErr(errId, fieldId) {
+  document.getElementById(errId)?.classList.add('show');
+  document.getElementById(fieldId)?.classList.add('invalid');
+}
+function clearErr(errId, fieldId) {
+  document.getElementById(errId)?.classList.remove('show');
+  document.getElementById(fieldId)?.classList.remove('invalid');
+}
+
+// ─────────────────────────────────────────────
+// Submit
+// ─────────────────────────────────────────────
+function submitProduct() {
+  document.getElementById('submitError').classList.remove('show');
+  if (!validate()) return;
+
+  const btn = document.getElementById('submitBtn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  const payload = {
+    action: 'addProduct',
+    sheet: document.getElementById('sheetSelect').value,
+    imageUrl: uploadedImageUrl,
+    name: document.getElementById('productName').value.trim(),
+    p1: document.getElementById('p1').value,
+    p2: document.getElementById('p2').value,
+    p3: document.getElementById('p3').value,
+    p4: document.getElementById('p4').value,
+  };
+
+  callAS(payload)
+    .then(code => {
+      btn.classList.remove('loading');
+      document.getElementById('successCode').textContent = 'Item Code: ' + code;
+      document.getElementById('successBanner').classList.add('show');
+      document.getElementById('successBanner').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setStep(4, true);
+    })
+    .catch(err => {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+      const el = document.getElementById('submitError');
+      el.textContent = 'Error: ' + err.message;
+      el.classList.add('show');
+    });
+}
+
+// ─────────────────────────────────────────────
+// Reset
+// ─────────────────────────────────────────────
+function resetForm() {
+  document.getElementById('successBanner').classList.remove('show');
+  clearImage();
+  document.getElementById('productName').value = '';
+  ['p1','p2','p3','p4'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('sheetSelect').value = '';
+  document.getElementById('codeVal').textContent = '—';
+  document.getElementById('codeHint').textContent = 'Select a category to preview';
+  document.getElementById('submitError').classList.remove('show');
+  document.getElementById('submitBtn').disabled = true;
+  nextCode = null;
+  uploadedImageUrl = null;
+  setStep(0);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ─────────────────────────────────────────────
+// Step UI
+// ─────────────────────────────────────────────
+function setStep(n, done = false) {
+  for (let i = 1; i <= 4; i++) {
+    const dot = document.getElementById('sd' + i);
+    dot.classList.remove('active', 'done');
+    if (i < n || (done && i <= n)) dot.classList.add('done');
+    else if (i === n && !done) dot.classList.add('active');
+    if (i < 4) {
+      const line = document.getElementById('sl' + i);
+      line.classList.toggle('done', i < n || done);
+    }
+  }
+}
+
+function updateSubmitBtn() {
+  const btn = document.getElementById('submitBtn');
+  const ready = uploadedImageUrl && document.getElementById('sheetSelect').value;
+  btn.disabled = !ready;
+}
+
+// ─────────────────────────────────────────────
+// Apps Script caller
+// ─────────────────────────────────────────────
+function callAS(params) {
+  const url = APPS_SCRIPT_URL + '?' + new URLSearchParams({ ...params }).toString();
+  return fetch(url, { redirect: 'follow' })
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) throw new Error(d.error);
+      return d.result;
+    });
+}
+
+// ─────────────────────────────────────────────
+// Util
+// ─────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
