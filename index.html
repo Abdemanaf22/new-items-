@@ -520,20 +520,20 @@ function clearImage() {
 }
 
 function uploadImageToServer(file, dataUrl) {
-  showProgress(0, 'Preparing upload…');
-
-  // Simulate progress while uploading (Apps Script is slow)
+  showProgress(0, 'Uploading image…');
   let prog = 0;
-  const ticker = setInterval(() => {
-    prog = Math.min(prog + 8, 85);
-    setProgress(prog, 'Uploading to Drive…');
-  }, 300);
-
-  const base64 = dataUrl.split(',')[1];
-  callAS({ action: 'uploadImage', data: base64, mime: file.type, filename: file.name })
+  const ticker = setInterval(() => { prog = Math.min(prog+8,85); setProgress(prog,'Uploading…'); }, 300);
+  const fd = new FormData();
+  fd.append('image', file);
+  fetch('https://api.imgbb.com/1/upload?key=70d6b0b53f87cec051bbfb201569bc34', {method:'POST',body:fd})
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) throw new Error(d.error?.message || 'Upload failed');
+      return d.data.url;
+    })
     .then(url => {
       clearInterval(ticker);
-      setProgress(100, 'Upload complete');
+      setProgress(100,'Upload complete');
       uploadedImageUrl = url;
       setTimeout(() => {
         document.getElementById('uploadProgress').classList.remove('show');
@@ -572,7 +572,8 @@ function hideImgError() {
 function loadSheets() {
   document.getElementById('sheetLoadStatus').textContent = 'Loading…';
   callAS({ action: 'getSheets' })
-    .then(names => {
+    .then(raw => {
+      const names = Array.isArray(raw) ? raw : (raw.result || raw);
       const sel = document.getElementById('sheetSelect');
       sel.innerHTML = '<option value="">Select category…</option>' +
         names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
@@ -582,8 +583,7 @@ function loadSheets() {
       document.getElementById('topbarStatus').textContent = 'Ready';
     })
     .catch(err => {
-      console.error('loadSheets error:', err);
-      document.getElementById('sheetLoadStatus').textContent = 'Failed: '+err.message;
+      document.getElementById('sheetLoadStatus').textContent = 'Failed';
       document.getElementById('topbarStatus').textContent = 'Connection error';
       document.getElementById('sheetSelect').innerHTML = '<option value="">Could not load sheets</option>';
     });
@@ -723,13 +723,21 @@ function updateSubmitBtn() {
 // Apps Script caller
 // ─────────────────────────────────────────────
 function callAS(params) {
-  const url = APPS_SCRIPT_URL + '?' + new URLSearchParams({ ...params }).toString();
-  return fetch(url, { redirect: 'follow' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.error) throw new Error(d.error);
-      return d.result;
-    });
+  return new Promise((resolve, reject) => {
+    const cb = 'cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const script = document.createElement('script');
+    const clean = () => { try { delete window[cb]; document.body.removeChild(script); } catch(e){} };
+    const timer = setTimeout(() => { clean(); reject(new Error('Timeout')); }, 30000);
+    window[cb] = d => {
+      clearTimeout(timer); clean();
+      if (d && d.error) { reject(new Error(d.error)); return; }
+      resolve(d && d.result !== undefined ? d.result : d);
+    };
+    script.onerror = () => { clearTimeout(timer); clean(); reject(new Error('Script load failed')); };
+    const p = {...params, callback: cb};
+    script.src = APPS_SCRIPT_URL + '?' + Object.keys(p).map(k=>encodeURIComponent(k)+'='+encodeURIComponent(p[k])).join('&');
+    document.body.appendChild(script);
+  });
 }
 
 // ─────────────────────────────────────────────
