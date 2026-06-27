@@ -530,7 +530,11 @@ function uploadImageToServer(file, dataUrl) {
   }, 300);
 
   const base64 = dataUrl.split(',')[1];
-  callASPost({ action: 'uploadImage', data: base64, mime: file.type, filename: file.name })
+  const fd = new FormData();
+  fd.append('image', base64);
+  fetch('https://api.imgbb.com/1/upload?key=70d6b0b53f87cec051bbfb201569bc34', {method:'POST', body: fd})
+    .then(r => r.json())
+    .then(d => { if (!d.success) throw new Error(d.error?.message || 'imgbb failed'); return d.data.url; })
     .then(url => {
       clearInterval(ticker);
       setProgress(100, 'Upload complete');
