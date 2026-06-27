@@ -530,11 +530,7 @@ function uploadImageToServer(file, dataUrl) {
   }, 300);
 
   const base64 = dataUrl.split(',')[1];
-  const fd = new FormData();
-  fd.append('image', base64);
-  fetch('https://api.imgbb.com/1/upload?key=70d6b0b53f87cec051bbfb201569bc34', {method:'POST', body: fd})
-    .then(r => r.json())
-    .then(d => { if (!d.success) throw new Error(d.error?.message || 'imgbb failed'); return d.data.url; })
+  callAS({ action: 'uploadImage', data: base64, mime: file.type, filename: file.name })
     .then(url => {
       clearInterval(ticker);
       setProgress(100, 'Upload complete');
@@ -586,7 +582,8 @@ function loadSheets() {
       document.getElementById('topbarStatus').textContent = 'Ready';
     })
     .catch(err => {
-      document.getElementById('sheetLoadStatus').textContent = 'Failed';
+      console.error('loadSheets error:', err);
+      document.getElementById('sheetLoadStatus').textContent = 'Failed: '+err.message;
       document.getElementById('topbarStatus').textContent = 'Connection error';
       document.getElementById('sheetSelect').innerHTML = '<option value="">Could not load sheets</option>';
     });
@@ -726,29 +723,13 @@ function updateSubmitBtn() {
 // Apps Script caller
 // ─────────────────────────────────────────────
 function callAS(params) {
-  return new Promise((resolve, reject) => {
-    const cb = 'cb_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    const script = document.createElement('script');
-    const clean = () => { try { delete window[cb]; document.body.removeChild(script); } catch(e){} };
-    const timer = setTimeout(() => { clean(); reject(new Error('Timeout')); }, 30000);
-    window[cb] = d => { clearTimeout(timer); clean(); if (d && d.error) reject(new Error(d.error)); else resolve(d && d.result !== undefined ? d.result : d); };
-    script.onerror = () => { clearTimeout(timer); clean(); reject(new Error('Script load failed')); };
-    const p = {...params, callback: cb};
-    script.src = APPS_SCRIPT_URL + '?' + Object.keys(p).map(k => encodeURIComponent(k)+'='+encodeURIComponent(p[k])).join('&');
-    document.body.appendChild(script);
-  });
-}
-
-function callASPost(params) {
-  console.log('POST to Apps Script:', params.action);
-  return fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify(params),
-    headers: {'Content-Type': 'text/plain;charset=utf-8'}
-  })
-  .then(r => { console.log('POST response status:', r.status); return r.text(); })
-  .then(t => { console.log('POST raw response:', t.slice(0,200)); return JSON.parse(t); })
-  .then(d => { if (d.error) throw new Error(d.error); return d.result; });
+  const url = APPS_SCRIPT_URL + '?' + new URLSearchParams({ ...params }).toString();
+  return fetch(url, { redirect: 'follow' })
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) throw new Error(d.error);
+      return d.result;
+    });
 }
 
 // ─────────────────────────────────────────────
