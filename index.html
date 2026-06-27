@@ -736,16 +736,15 @@ function callAS(params) {
 }
 
 function callASPost(params) {
-  return new Promise((resolve, reject) => {
-    fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify(params),
-      headers: {'Content-Type': 'text/plain'}
-    })
-    .then(r => r.json())
-    .then(d => { if (d.error) reject(new Error(d.error)); else resolve(d.result); })
-    .catch(reject);
-  });
+  console.log('POST to Apps Script:', params.action);
+  return fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify(params),
+    headers: {'Content-Type': 'text/plain;charset=utf-8'}
+  })
+  .then(r => { console.log('POST response status:', r.status); return r.text(); })
+  .then(t => { console.log('POST raw response:', t.slice(0,200)); return JSON.parse(t); })
+  .then(d => { if (d.error) throw new Error(d.error); return d.result; });
 }
 
 // ─────────────────────────────────────────────
