@@ -300,6 +300,38 @@
   @media (max-width: 480px) {
     .price-grid { grid-template-columns: 1fr; }
   }
+
+  /* ── Mode tabs ── */
+  .mode-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .mode-tab {
+    flex: 1; height: 40px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+    background: var(--surface); color: var(--text2); font-size: 13px; font-weight: 600;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .mode-tab.active { background: var(--accent-dim); border-color: var(--accent-border); color: var(--accent); }
+
+  /* ── Price detail textareas ── */
+  .price-grid textarea {
+    width: 100%; min-height: 80px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); color: var(--text); font-size: 13px; font-family: var(--mono);
+    padding: 8px 10px; outline: none; resize: vertical; white-space: pre-wrap;
+  }
+  .price-grid textarea:focus { border-color: var(--accent); }
+
+  /* ── Product search / list ── */
+  .search-row input { margin-bottom: 10px; }
+  .product-list { max-height: 260px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .product-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer;
+    border-bottom: 1px solid var(--border);
+  }
+  .product-row:last-child { border-bottom: none; }
+  .product-row:hover { background: var(--surface2); }
+  .product-row.selected { background: var(--accent-dim); }
+  .product-row img { width: 34px; height: 34px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: var(--surface2); }
+  .product-row .pr-name { font-size: 13px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .product-row .pr-code { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+  .list-status { font-size: 12px; color: var(--text3); padding: 10px; text-align: center; }
 </style>
 </head>
 <body>
@@ -310,6 +342,30 @@
 </div>
 
 <div class="container">
+
+  <!-- Mode tabs -->
+  <div class="mode-tabs">
+    <button class="mode-tab active" id="tabAdd" onclick="setMode('add')">➕ Add Product</button>
+    <button class="mode-tab" id="tabEdit" onclick="setMode('edit')">✏️ Edit Existing Product</button>
+  </div>
+
+  <!-- Edit: select product card -->
+  <div class="card" id="cardEditSelect" style="display:none">
+    <div class="card-head"><h3>Find Product to Edit</h3></div>
+    <div class="card-body">
+      <div class="field">
+        <label for="editSheetSelect">Category</label>
+        <select id="editSheetSelect" class="loading" onchange="onEditSheetChange()">
+          <option value="">Loading sheets…</option>
+        </select>
+      </div>
+      <div class="field search-row">
+        <label for="editSearch">Search by name or item code</label>
+        <input type="text" id="editSearch" placeholder="Type to filter…" oninput="renderEditList()">
+      </div>
+      <div class="product-list" id="editList"><div class="list-status">Select a category first</div></div>
+    </div>
+  </div>
 
   <!-- Step indicator -->
   <div class="steps" id="stepIndicator">
@@ -333,7 +389,7 @@
   <!-- Success banner -->
   <div class="success-banner" id="successBanner">
     <div class="success-icon">✓</div>
-    <div class="success-title">Product Added Successfully</div>
+    <div class="success-title" id="successTitle">Product Added Successfully</div>
     <div class="success-code" id="successCode"></div>
     <button class="success-again" onclick="resetForm()">+ Add another product</button>
   </div>
@@ -399,23 +455,23 @@
       </div>
       <div class="price-grid">
         <div class="price-field field">
-          <label for="p1">Price Tier 1 (Lowest)</label>
-          <input type="number" id="p1" min="0" step="0.01" placeholder="0.00" oninput="clearErr('p1Err','p1')">
+          <label for="p1">Price Tier 1</label>
+          <textarea id="p1" placeholder="🍁1 ton @1800/-" oninput="clearErr('p1Err','p1')"></textarea>
           <div class="field-err" id="p1Err">Required.</div>
         </div>
         <div class="price-field field">
           <label for="p2">Price Tier 2</label>
-          <input type="number" id="p2" min="0" step="0.01" placeholder="0.00" oninput="clearErr('p2Err','p2')">
+          <textarea id="p2" placeholder="🍁1 ton @1900/-" oninput="clearErr('p2Err','p2')"></textarea>
           <div class="field-err" id="p2Err">Required.</div>
         </div>
         <div class="price-field field">
           <label for="p3">Price Tier 3</label>
-          <input type="number" id="p3" min="0" step="0.01" placeholder="0.00" oninput="clearErr('p3Err','p3')">
+          <textarea id="p3" placeholder="🍁1 ton @2000/-" oninput="clearErr('p3Err','p3')"></textarea>
           <div class="field-err" id="p3Err">Required.</div>
         </div>
         <div class="price-field field">
-          <label for="p4">Price Tier 4 (Highest)</label>
-          <input type="number" id="p4" min="0" step="0.01" placeholder="0.00" oninput="clearErr('p4Err','p4')">
+          <label for="p4">Price Tier 4</label>
+          <textarea id="p4" placeholder="🍁1 ton @2100/-" oninput="clearErr('p4Err','p4')"></textarea>
           <div class="field-err" id="p4Err">Required.</div>
         </div>
       </div>
@@ -440,7 +496,7 @@
   <div class="error-msg" id="submitError"></div>
   <button class="submit-btn" id="submitBtn" onclick="submitProduct()" disabled>
     <div class="spinner"></div>
-    <span class="btn-text">Add Product</span>
+    <span class="btn-text" id="submitBtnText">Add Product</span>
   </button>
 
 </div>
@@ -457,6 +513,27 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztWGA2j4b7UTZI
 let uploadedImageUrl = null;
 let nextCode = null;
 let sheetsLoaded = false;
+let mode = 'add';               // 'add' | 'edit'
+let editProducts = [];          // products loaded for selected edit category
+let editingRow = null;          // sheet row currently being edited
+let editingCode = null;         // existing item code, unchanged on save
+let lastCategory = localStorage ? null : null; // (no persistent storage used)
+
+// ─────────────────────────────────────────────
+// Mode switching
+// ─────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.getElementById('tabAdd').classList.toggle('active', m === 'add');
+  document.getElementById('tabEdit').classList.toggle('active', m === 'edit');
+  document.getElementById('cardEditSelect').style.display = m === 'edit' ? '' : 'none';
+  document.getElementById('card2').style.display = m === 'edit' ? 'none' : '';
+  document.getElementById('card4').style.display = m === 'edit' ? 'none' : '';
+  document.getElementById('stepIndicator').style.display = m === 'edit' ? 'none' : '';
+  document.getElementById('submitBtnText').textContent = m === 'edit' ? 'Save Changes' : 'Add Product';
+  resetForm(true);
+  if (m === 'edit') loadEditSheets();
+}
 
 // ─────────────────────────────────────────────
 // Init
@@ -465,7 +542,18 @@ window.addEventListener('DOMContentLoaded', () => {
   loadSheets();
   setupDrag();
   updateSubmitBtn();
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); submitProduct(); }
+  });
 });
+
+function restoreLastCategory(names) {
+  const last = sessionStorage.getItem && sessionStorage.getItem('procutLastCategory');
+  if (last && names.includes(last)) {
+    document.getElementById('sheetSelect').value = last;
+    onSheetChange();
+  }
+}
 
 // ─────────────────────────────────────────────
 // Drag & drop
@@ -569,11 +657,14 @@ function hideImgError() {
 // ─────────────────────────────────────────────
 // Sheet loading
 // ─────────────────────────────────────────────
+let cachedSheetNames = null;
+
 function loadSheets() {
   document.getElementById('sheetLoadStatus').textContent = 'Loading…';
   callAS({ action: 'getSheets' })
     .then(raw => {
       const names = Array.isArray(raw) ? raw : (raw.result || raw);
+      cachedSheetNames = names;
       const sel = document.getElementById('sheetSelect');
       sel.innerHTML = '<option value="">Select category…</option>' +
         names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
@@ -581,6 +672,7 @@ function loadSheets() {
       sheetsLoaded = true;
       document.getElementById('sheetLoadStatus').textContent = names.length + ' sheets';
       document.getElementById('topbarStatus').textContent = 'Ready';
+      restoreLastCategory(names);
     })
     .catch(err => {
       document.getElementById('sheetLoadStatus').textContent = 'Failed';
@@ -589,13 +681,88 @@ function loadSheets() {
     });
 }
 
+function loadEditSheets() {
+  const sel = document.getElementById('editSheetSelect');
+  const fill = names => {
+    sel.innerHTML = '<option value="">Select category…</option>' +
+      names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    sel.classList.remove('loading');
+  };
+  if (cachedSheetNames) { fill(cachedSheetNames); return; }
+  callAS({ action: 'getSheets' })
+    .then(raw => { cachedSheetNames = Array.isArray(raw) ? raw : (raw.result || raw); fill(cachedSheetNames); })
+    .catch(() => { sel.innerHTML = '<option value="">Could not load sheets</option>'; });
+}
+
+function onEditSheetChange() {
+  const sheet = document.getElementById('editSheetSelect').value;
+  const list = document.getElementById('editList');
+  editProducts = [];
+  editingRow = null;
+  if (!sheet) { list.innerHTML = '<div class="list-status">Select a category first</div>'; return; }
+  list.innerHTML = '<div class="list-status">Loading products…</div>';
+  callAS({ action: 'getProductsFull', sheet })
+    .then(rows => { editProducts = rows || []; document.getElementById('editSearch').value = ''; renderEditList(); })
+    .catch(() => { list.innerHTML = '<div class="list-status">Failed to load products</div>'; });
+}
+
+function renderEditList() {
+  const q = document.getElementById('editSearch').value.trim().toLowerCase();
+  const list = document.getElementById('editList');
+  const filtered = !q ? editProducts : editProducts.filter(p =>
+    p.name.toLowerCase().includes(q) || (p.code || '').toLowerCase().includes(q));
+  if (!filtered.length) { list.innerHTML = '<div class="list-status">No products found</div>'; return; }
+  list.innerHTML = filtered.map(p => `
+    <div class="product-row" onclick="selectEditProduct(${p.row})">
+      <img src="${esc(p.img)}" onerror="this.style.visibility='hidden'">
+      <div class="pr-name">${esc(p.name)}</div>
+      <div class="pr-code">${esc(p.code || '')}</div>
+    </div>`).join('');
+}
+
+function selectEditProduct(row) {
+  const p = editProducts.find(x => x.row === row);
+  if (!p) return;
+  if (editingRow && editingRow !== row &&
+      (document.getElementById('productName').value.trim() || ['p1','p2','p3','p4'].some(id => document.getElementById(id).value.trim()))) {
+    if (!confirm('Discard unsaved changes to the current product?')) return;
+  }
+  editingRow = row;
+  editingCode = p.code || '';
+  uploadedImageUrl = p.img || null;
+  document.querySelectorAll('.product-row').forEach(el => el.classList.remove('selected'));
+  document.getElementById('productName').value = p.name || '';
+  document.getElementById('p1').value = p.p1 || '';
+  document.getElementById('p2').value = p.p2 || '';
+  document.getElementById('p3').value = p.p3 || '';
+  document.getElementById('p4').value = p.p4 || '';
+  const zone = document.getElementById('uploadZone');
+  const pw = document.getElementById('previewWrap');
+  if (p.img) {
+    zone.style.display = 'none';
+    pw.classList.add('show');
+    document.getElementById('previewImg').src = p.img;
+    document.getElementById('previewName').textContent = 'Current image (click Change to replace)';
+    document.getElementById('previewSize').textContent = 'Item Code: ' + (p.code || '—');
+  } else {
+    zone.style.display = '';
+    pw.classList.remove('show');
+  }
+  updateSubmitBtn();
+  document.getElementById('productName').focus();
+}
+
+let addModeNames = [];
+
 function onSheetChange() {
   const sheet = document.getElementById('sheetSelect').value;
   clearErr('sheetErr', 'sheetSelect');
   document.getElementById('codeVal').textContent = '…';
   document.getElementById('codeHint').textContent = 'Fetching next code';
   nextCode = null;
+  addModeNames = [];
   if (!sheet) return;
+  sessionStorage.setItem && sessionStorage.setItem('procutLastCategory', sheet);
   callAS({ action: 'getNextCode', sheet })
     .then(code => {
       nextCode = code;
@@ -608,6 +775,9 @@ function onSheetChange() {
       document.getElementById('codeVal').textContent = '—';
       document.getElementById('codeHint').textContent = 'Could not fetch code';
     });
+  callAS({ action: 'getProductsFull', sheet })
+    .then(rows => { addModeNames = (rows || []).map(r => r.name.toLowerCase()); })
+    .catch(() => {});
 }
 
 // ─────────────────────────────────────────────
@@ -616,17 +786,15 @@ function onSheetChange() {
 function validate() {
   let ok = true;
   if (!uploadedImageUrl) ok = false;
-  if (!document.getElementById('sheetSelect').value) {
+  if (mode === 'add' && !document.getElementById('sheetSelect').value) {
     showErr('sheetErr', 'sheetSelect'); ok = false;
   }
-  ['productName'].forEach(id => {
-    if (!document.getElementById(id).value.trim()) {
-      showErr(id + 'Err', id); ok = false;
-    }
-  });
+  if (mode === 'edit' && !editingRow) ok = false;
+  if (!document.getElementById('productName').value.trim()) {
+    showErr('nameErr', 'productName'); ok = false;
+  }
   ['p1','p2','p3','p4'].forEach(id => {
-    const v = document.getElementById(id).value;
-    if (v === '' || isNaN(v)) { showErr(id + 'Err', id); ok = false; }
+    if (!document.getElementById(id).value.trim()) { showErr(id + 'Err', id); ok = false; }
   });
   return ok;
 }
@@ -646,15 +814,31 @@ function submitProduct() {
   document.getElementById('submitError').classList.remove('show');
   if (!validate()) return;
 
+  const name = document.getElementById('productName').value.trim();
+
+  if (mode === 'add' && addModeNames.includes(name.toLowerCase())) {
+    if (!confirm('This product already exists in this category.\nDo you still want to add it?')) return;
+  }
+
   const btn = document.getElementById('submitBtn');
   btn.classList.add('loading');
   btn.disabled = true;
 
-  const payload = {
+  const payload = mode === 'edit' ? {
+    action: 'updateProduct',
+    sheet: document.getElementById('editSheetSelect').value,
+    row: editingRow,
+    imageUrl: uploadedImageUrl,
+    name: name,
+    p1: document.getElementById('p1').value,
+    p2: document.getElementById('p2').value,
+    p3: document.getElementById('p3').value,
+    p4: document.getElementById('p4').value,
+  } : {
     action: 'addProduct',
     sheet: document.getElementById('sheetSelect').value,
     imageUrl: uploadedImageUrl,
-    name: document.getElementById('productName').value.trim(),
+    name: name,
     p1: document.getElementById('p1').value,
     p2: document.getElementById('p2').value,
     p3: document.getElementById('p3').value,
@@ -664,10 +848,12 @@ function submitProduct() {
   callAS(payload)
     .then(code => {
       btn.classList.remove('loading');
-      document.getElementById('successCode').textContent = 'Item Code: ' + code;
+      document.getElementById('successTitle').textContent = mode === 'edit' ? 'Product Updated Successfully' : 'Product Added Successfully';
+      document.getElementById('successCode').textContent = 'Item Code: ' + (code || editingCode || '');
       document.getElementById('successBanner').classList.add('show');
       document.getElementById('successBanner').scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setStep(4, true);
+      if (mode === 'add') setStep(4, true);
+      if (mode === 'edit' && document.getElementById('editSheetSelect').value) onEditSheetChange();
     })
     .catch(err => {
       btn.classList.remove('loading');
@@ -681,20 +867,23 @@ function submitProduct() {
 // ─────────────────────────────────────────────
 // Reset
 // ─────────────────────────────────────────────
-function resetForm() {
+function resetForm(silent) {
   document.getElementById('successBanner').classList.remove('show');
   clearImage();
   document.getElementById('productName').value = '';
   ['p1','p2','p3','p4'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('sheetSelect').value = '';
-  document.getElementById('codeVal').textContent = '—';
-  document.getElementById('codeHint').textContent = 'Select a category to preview';
   document.getElementById('submitError').classList.remove('show');
   document.getElementById('submitBtn').disabled = true;
   nextCode = null;
   uploadedImageUrl = null;
-  setStep(0);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  editingRow = null;
+  editingCode = null;
+  document.querySelectorAll('.product-row').forEach(el => el.classList.remove('selected'));
+  if (mode === 'add') {
+    setStep(0);
+    if (document.getElementById('sheetSelect').value) onSheetChange();
+  }
+  if (!silent) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ─────────────────────────────────────────────
@@ -715,7 +904,9 @@ function setStep(n, done = false) {
 
 function updateSubmitBtn() {
   const btn = document.getElementById('submitBtn');
-  const ready = uploadedImageUrl && document.getElementById('sheetSelect').value;
+  const ready = mode === 'edit'
+    ? (uploadedImageUrl && editingRow)
+    : (uploadedImageUrl && document.getElementById('sheetSelect').value);
   btn.disabled = !ready;
 }
 
