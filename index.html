@@ -347,6 +347,33 @@
   <div class="mode-tabs">
     <button class="mode-tab active" id="tabAdd" onclick="setMode('add')">➕ Add Product</button>
     <button class="mode-tab" id="tabEdit" onclick="setMode('edit')">✏️ Edit Existing Product</button>
+    <button class="mode-tab" id="tabTrend" onclick="setMode('trend')">⭐ Trending</button>
+  </div>
+
+  <!-- Trending picker card -->
+  <div class="card" id="cardTrend" style="display:none">
+    <div class="card-head"><h3>Manage Trending Products (shown on homepage)</h3></div>
+    <div class="card-body">
+      <div class="field">
+        <label for="trendSheetSelect">Category</label>
+        <select id="trendSheetSelect" class="loading" onchange="onTrendSheetChange()">
+          <option value="">Loading sheets…</option>
+        </select>
+      </div>
+      <div class="field search-row">
+        <label for="trendSearch">Search by name or item code</label>
+        <input type="text" id="trendSearch" placeholder="Type to filter…" oninput="renderTrendList()">
+      </div>
+      <div class="product-list" id="trendList"><div class="list-status">Select a category first</div></div>
+      <div class="field" style="margin-top:14px">
+        <label id="trendSelCountLabel">Selected (0) — order shown here matches homepage order</label>
+        <div class="product-list" id="trendSelectedList"><div class="list-status">None selected</div></div>
+      </div>
+      <button class="submit-btn" id="trendSaveBtn" onclick="saveTrending()" style="margin-top:14px">
+        <div class="spinner"></div><span class="btn-text">Save Trending List</span>
+      </button>
+      <div class="error-msg" id="trendError"></div>
+    </div>
   </div>
 
   <!-- Edit: select product card -->
@@ -520,19 +547,129 @@ let editingCode = null;         // existing item code, unchanged on save
 let lastCategory = localStorage ? null : null; // (no persistent storage used)
 
 // ─────────────────────────────────────────────
-// Mode switching
+// Trending picker
+// ─────────────────────────────────────────────
+let trendProducts = [];         // products loaded for currently selected category
+let trendSelected = [];         // [{code,name,img}] in homepage order
+
+function loadTrendSheets() {
+  const sel = document.getElementById('trendSheetSelect');
+  const fill = names => {
+    sel.innerHTML = '<option value="">Select category…</option>' +
+      names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    sel.classList.remove('loading');
+  };
+  if (cachedSheetNames) fill(cachedSheetNames);
+  else callAS({ action: 'getSheets' }).then(r => { cachedSheetNames = Array.isArray(r) ? r : (r.result || r); fill(cachedSheetNames); });
+
+  callAS({ action: 'getTrending' }).then(codes => {
+    trendSelected = (codes || []).map(c => ({ code: c, name: c, img: '' }));
+    renderSelectedTrend();
+  }).catch(() => {});
+}
+
+function onTrendSheetChange() {
+  const sheet = document.getElementById('trendSheetSelect').value;
+  const list = document.getElementById('trendList');
+  trendProducts = [];
+  if (!sheet) { list.innerHTML = '<div class="list-status">Select a category first</div>'; return; }
+  list.innerHTML = '<div class="list-status">Loading products…</div>';
+  callAS({ action: 'getProductsFull', sheet }).then(rows => {
+    trendProducts = rows || [];
+    // fill in name/img for any already-selected codes found in this category
+    trendProducts.forEach(p => {
+      const s = trendSelected.find(x => x.code === p.code);
+      if (s) { s.name = p.name; s.img = p.img; }
+    });
+    renderSelectedTrend();
+    document.getElementById('trendSearch').value = '';
+    renderTrendList();
+  }).catch(() => { list.innerHTML = '<div class="list-status">Failed to load products</div>'; });
+}
+
+function renderTrendList() {
+  const q = document.getElementById('trendSearch').value.trim().toLowerCase();
+  const list = document.getElementById('trendList');
+  const filtered = !q ? trendProducts : trendProducts.filter(p =>
+    p.name.toLowerCase().includes(q) || (p.code || '').toLowerCase().includes(q));
+  if (!filtered.length) { list.innerHTML = '<div class="list-status">No products found</div>'; return; }
+  list.innerHTML = filtered.map(p => {
+    const on = trendSelected.some(x => x.code === p.code);
+    return `<div class="product-row${on ? ' selected' : ''}" onclick="toggleTrend('${p.code}')">
+      <img src="${esc(p.img)}" onerror="this.style.visibility='hidden'">
+      <div class="pr-name">${esc(p.name)}</div>
+      <div class="pr-code">${on ? '⭐' : '☆'} ${esc(p.code || '')}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleTrend(code) {
+  const idx = trendSelected.findIndex(x => x.code === code);
+  if (idx > -1) {
+    trendSelected.splice(idx, 1);
+  } else {
+    const p = trendProducts.find(x => x.code === code);
+    if (p) trendSelected.push({ code: p.code, name: p.name, img: p.img });
+  }
+  renderTrendList();
+  renderSelectedTrend();
+}
+
+function renderSelectedTrend() {
+  document.getElementById('trendSelCountLabel').textContent =
+    `Selected (${trendSelected.length}) — order shown here matches homepage order`;
+  const list = document.getElementById('trendSelectedList');
+  if (!trendSelected.length) { list.innerHTML = '<div class="list-status">None selected</div>'; return; }
+  list.innerHTML = trendSelected.map((p, i) => `
+    <div class="product-row">
+      <img src="${esc(p.img)}" onerror="this.style.visibility='hidden'">
+      <div class="pr-name">${esc(p.name)}</div>
+      <div class="pr-code">${esc(p.code)}</div>
+      <span style="cursor:pointer;padding:0 6px" onclick="event.stopPropagation();moveTrend(${i},-1)">↑</span>
+      <span style="cursor:pointer;padding:0 6px" onclick="event.stopPropagation();moveTrend(${i},1)">↓</span>
+      <span style="cursor:pointer;padding:0 6px;color:#e66" onclick="event.stopPropagation();toggleTrend('${p.code}')">✕</span>
+    </div>`).join('');
+}
+
+function moveTrend(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= trendSelected.length) return;
+  [trendSelected[i], trendSelected[j]] = [trendSelected[j], trendSelected[i]];
+  renderSelectedTrend();
+}
+
+function saveTrending() {
+  const btn = document.getElementById('trendSaveBtn');
+  btn.classList.add('loading'); btn.disabled = true;
+  callAS({ action: 'saveTrending', codes: trendSelected.map(p => p.code).join(',') })
+    .then(() => { btn.classList.remove('loading'); btn.disabled = false;
+      const el = document.getElementById('trendError'); el.style.color = '#4caf50';
+      el.textContent = 'Saved!'; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 2000); })
+    .catch(err => { btn.classList.remove('loading'); btn.disabled = false;
+      const el = document.getElementById('trendError'); el.style.color = '';
+      el.textContent = 'Error: ' + err.message; el.classList.add('show'); });
+}
+
+// ─────────────────────────────────────────────
 // ─────────────────────────────────────────────
 function setMode(m) {
   mode = m;
   document.getElementById('tabAdd').classList.toggle('active', m === 'add');
   document.getElementById('tabEdit').classList.toggle('active', m === 'edit');
+  document.getElementById('tabTrend').classList.toggle('active', m === 'trend');
   document.getElementById('cardEditSelect').style.display = m === 'edit' ? '' : 'none';
-  document.getElementById('card2').style.display = m === 'edit' ? 'none' : '';
-  document.getElementById('card4').style.display = m === 'edit' ? 'none' : '';
-  document.getElementById('stepIndicator').style.display = m === 'edit' ? 'none' : '';
-  document.getElementById('submitBtnText').textContent = m === 'edit' ? 'Save Changes' : 'Add Product';
+  document.getElementById('cardTrend').style.display = m === 'trend' ? '' : 'none';
+  const showAddCards = m === 'add' || m === 'edit';
+  document.getElementById('card1').style.display = showAddCards ? '' : 'none';
+  document.getElementById('card3').style.display = showAddCards ? '' : 'none';
+  document.getElementById('card2').style.display = m === 'edit' || m === 'trend' ? 'none' : '';
+  document.getElementById('card4').style.display = m === 'edit' || m === 'trend' ? 'none' : '';
+  document.getElementById('stepIndicator').style.display = showAddCards ? (m === 'edit' ? 'none' : '') : 'none';
+  document.getElementById('submitBtn').style.display = showAddCards ? '' : 'none';
+  if (showAddCards) document.getElementById('submitBtnText').textContent = m === 'edit' ? 'Save Changes' : 'Add Product';
   resetForm(true);
   if (m === 'edit') loadEditSheets();
+  if (m === 'trend') loadTrendSheets();
 }
 
 // ─────────────────────────────────────────────
